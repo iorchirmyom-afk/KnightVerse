@@ -246,7 +246,7 @@ class AutoscalingDaemon:
             
         except Exception as e:
             logger.error(f"Failed to get queue metrics: {e}")
-            return {"queue_length": 0, "avg_wait_time_ms": 0.0}
+            return {"queue_length": 0, "avg_wait_time_ms": 0.0, "error": str(e)}
             
     async def _get_resource_metrics(self) -> ResourceMetrics:
         """Get current system resource metrics."""

@@ -84,11 +84,11 @@ class AutoscalingWorkerPool:
         self.max_workers = max_workers
         self.enable_autoscaling = enable_autoscaling
         
-        factory = worker_factory or (lambda cfg, book: GPUAnalysisWorker(cfg, opening_book=book))
-        self._workers = [factory(config, opening_book) for config in base_configs]
+        self._worker_factory = worker_factory or (lambda cfg, book: GPUAnalysisWorker(cfg, opening_book=book))
+        self._workers = [self._worker_factory(config, opening_book) for config in base_configs]
 
-        maia_factory = maia_worker_factory or (lambda cfg, maia_cfg: MaiaWorker(cfg, maia_cfg.path))
-        self._maia_workers = [maia_factory(base_configs[0], maia_config) for maia_config in maia_configs]
+        self._maia_worker_factory = maia_worker_factory or (lambda cfg, maia_cfg: MaiaWorker(cfg, maia_cfg.path))
+        self._maia_workers = [self._maia_worker_factory(base_configs[0], maia_config) for maia_config in maia_configs]
 
         self._reservations = [0 for _ in self._workers]
         self._maia_reservations = [0 for _ in self._maia_workers]
@@ -157,8 +157,7 @@ class AutoscalingWorkerPool:
             start_time = time.time()
             
             # Create and start new worker
-            factory = lambda cfg, book: GPUAnalysisWorker(cfg, opening_book=None)
-            new_worker = factory(config, None)
+            new_worker = self._worker_factory(config, None)
             
             await new_worker.start()
             
