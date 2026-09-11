@@ -337,15 +337,36 @@ class AsyncUciBridge:
                         f"retrying after {backoff:.1f}s backoff"
                     )
                     await asyncio.sleep(backoff)
-                    # Send isready to check if engine is still responsive
+                    # Send isready to check if engine is still responsive. This
+                    # must NOT go through ensure_ready()/_wait_for_with_retry -
+                    # ensure_ready() is exactly what timed out to get us here,
+                    # so calling it again recurses into this same retry loop.
+                    # Each level adds a real timeout plus a growing backoff
+                    # before recursing further, so failing engines don't just
+                    # retry a few times - they run for however long Python
+                    # takes to hit its recursion limit (in practice, minutes).
                     try:
-                        await self.ensure_ready()
+                        await asyncio.wait_for(
+                            self._check_liveness_once(), timeout=timeout_value
+                        )
                     except Exception as e:
                         logger.warning(f"Failed to verify engine readiness after timeout: {str(e)}")
         
         # If all retries failed
         logger.error(f"All {max_retries + 1} attempts failed waiting for engine response")
         raise UciBridgeError("timed out waiting for engine response after all retries") from last_exception
+
+    async def _check_liveness_once(self) -> None:
+        """Send `isready` and wait for a single `readyok`, with no retrying.
+
+        Used only as a best-effort liveness probe between retry attempts in
+        :meth:`_wait_for_with_retry`; the caller times and logs this itself.
+        """
+        await self._send_command("isready")
+        while True:
+            line = await self._read_line()
+            if line == "readyok":
+                return
 
     # Maintain backward compatibility with original method name
     async def _wait_for(
